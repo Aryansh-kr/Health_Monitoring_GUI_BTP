@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>BP Prediction</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #0f172a, #000);
+      color: #e0f2fe;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      font-size: 32px;
+      color: #00d9ff;
+      text-shadow: 0 0 10px #00d9ff, 0 0 20px #00aaff;
+      margin-top: 20px;
+    }
+
+    #bp {
+      font-size: 22px;
+      margin-top: 20px;
+      text-shadow: 0 0 5px #00d9ff;
+    }
+
+    .bp-container {
+      background: #0d1117;
+      padding: 20px;
+      border-radius: 20px;
+      margin-top: 30px;
+      box-shadow: 0 0 25px rgba(0, 195, 255, 0.4);
+      text-align: center;
+      max-width: 1000px;
+      width: 90%;
+    }
+
+    canvas {
+      background: #111827;
+      border: 2px solid #00c3ff;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0, 195, 255, 0.4);
+      margin-top: 20px;
+      padding: 10px;
+      width: 100% !important;
+      height: 400px !important;
+    }
+
+    button {
+      padding: 12px 25px;
+      margin-top: 20px;
+      border: none;
+      border-radius: 20px;
+      background: #00c3ff;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(0, 195, 255, 0.6);
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #00aaff;
+      box-shadow: 0 0 20px #00c3ff, 0 0 30px #66e0ff;
+    }
+
+    .back-btn {
+      display: inline-block;
+      margin: 20px auto 0 20px;
+      padding: 12px 25px;
+      background: #ff4444;
+      color: white;
+      font-weight: bold;
+      border-radius: 20px;
+      text-decoration: none;
+      transition: 0.3s;
+      box-shadow: 0 0 12px rgba(255, 68, 68, 0.6);
+    }
+
+    .back-btn:hover {
+      background: #ff2222;
+      box-shadow: 0 0 20px #ff4444, 0 0 30px #ff6666;
+    }
+  </style>
+</head>
+<body>
+
+  <a href="/menu" class="back-btn">⬅ Back</a>
+
+  <div class="bp-container">
+    <h1>🩸 Blood Pressure Prediction</h1>
+    <p id="bp">SBP: -- | DBP: --</p>
+    <canvas id="ppgChart"></canvas>
+    <button onclick="sendData()">Predict</button>
+  </div>
+
+  <script>
+    let chart = new Chart(document.getElementById("ppgChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Filtered PPG",
+          data: [],
+          borderColor: "#1abc9c",
+          fill: false,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        plugins: { legend: { labels: { color: "#e0f2fe" } } },
+        scales: {
+          x: { ticks: { color: "white" }, grid: { color: "rgba(255,255,255,0.1)" } },
+          y: { ticks: { color: "white" }, grid: { color: "rgba(255,255,255,0.1)" } }
+        }
+      }
+    });
+
+    async function sendData() {
+      // Simulate random PPG data (replace with real ESP32 stream)
+      let ppg = Array.from({length: 500}, () => Math.random());
+      const res = await fetch("/predict", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ppg: ppg, fs: 100})
+      });
+      const data = await res.json();
+      if(data.error) { alert(data.error); return; }
+
+      document.getElementById("bp").innerText = `SBP: ${data.sbp} | DBP: ${data.dbp}`;
+      chart.data.labels = data.filtered.map((_, i) => i);
+      chart.data.datasets[0].data = data.filtered;
+      chart.update();
+    }
+  </script>
+</body>
+</html>
