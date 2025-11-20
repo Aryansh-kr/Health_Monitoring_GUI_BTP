@@ -13,8 +13,12 @@ from scipy.signal import butter, filtfilt, find_peaks, welch
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler
 from scipy import stats
-
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+import sqlite3
+import os
 app = Flask(__name__)
+app.secret_key = "aryansh"
 
 # -------------------------
 # Connection configuration
@@ -26,6 +30,28 @@ connection_config = {
     'ble_address': None,
     'wifi_ip': None
 }
+
+# ---------------------------
+# DATABASE INITIALIZATION
+# ---------------------------
+def init_db():
+    if not os.path.exists("users.db"):
+        conn = sqlite3.connect("users.db")
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                email TEXT UNIQUE,
+                password TEXT
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+init_db()
 
 # -------------------------
 # Buffers and settings
@@ -44,17 +70,107 @@ STREAM_PPG_BUFFERS = {
 }
 
 # -------------------------
-# Routes - UI pages
-# -------------------------
-@app.route('/')
+# # Routes - UI pages
+# # -------------------------
+# @app.route('/')
+# def intro():
+#     # Single landing page; ensure 'intro.html' exists in templates
+#     return render_template('intro.html')
+
+
+# ---------------------------
+# HOME ROUTE → LOGIN PAGE
+# ---------------------------
+@app.route("/")
+def home():
+    return render_template("login.html")
+
+
+# ---------------------------
+# SIGNUP PAGE
+# ---------------------------
+@app.route("/signup")
+def signup():
+    return render_template("signup.html")
+
+
+# ---------------------------
+# HANDLE SIGNUP FORM
+# ---------------------------
+@app.route("/signup", methods=["POST"])
+def signup_post():
+    name = request.form["name"]
+    email = request.form["email"]
+    password = request.form["password"]
+
+    hash_pass = generate_password_hash(password)
+
+    try:
+        conn = sqlite3.connect("users.db")
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+            (name, email, hash_pass),
+        )
+        conn.commit()
+        conn.close()
+    except:
+        return "❌ Email already exists! Use another email."
+
+    return redirect("/login")
+
+
+# ---------------------------
+# LOGIN PAGE
+# ---------------------------
+@app.route("/login")
+def login():
+    return render_template("login.html")
+
+
+# ---------------------------
+# HANDLE LOGIN FORM
+# ---------------------------
+@app.route("/login", methods=["POST"])
+def login_post():
+    email = request.form["email"]
+    password = request.form["password"]
+
+    conn = sqlite3.connect("users.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = ?", (email,))
+    user = cur.fetchone()
+    conn.close()
+
+    if user and check_password_hash(user[3], password):
+        session["user"] = user[1]  # store username in session
+        return redirect("/intro")
+    else:
+        return "❌ Incorrect email or password!"
+
+# ---------------------------
+# INTRO PAGE (AFTER LOGIN)
+# ---------------------------
+@app.route("/intro")
 def intro():
-    # Single landing page; ensure 'intro.html' exists in templates
-    return render_template('intro.html')
+    if "user" not in session:
+        return redirect("/login")
+    return render_template("intro.html")   # your intro screen
+
+# ---------------------------
+# LOGOUT USER
+# ---------------------------
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 @app.route('/menu')
 def menu():
-    return render_template('menu.html')
+    if 'user' not in session:
+        return redirect('/login')
+    return render_template('menu.html', username=session['user'])
 
 
 @app.route("/ppg")
@@ -479,6 +595,7 @@ def toggle_pause():
     paused = not paused
     return jsonify({"paused": paused})
 
+
 @app.route("/settings", methods=["POST"])
 def update_settings():
     global thresholds
@@ -549,6 +666,22 @@ def butter_bandpass_filter(data, lowcut=0.5, highcut=8.0, fs=100, order=3):
     low, high = lowcut/nyq, highcut/nyq
     b, a = butter(order, [low, high], btype="band")
     return filtfilt(b, a, data)
+
+# @app.route("/history")
+# def history():
+#     # Example: Load last 20 samples from files or DB
+#     try:
+#         ppg_data = load_ppg_history()
+#         ecg_data = load_ecg_history()
+#         bp_data = load_bp_history()
+#     except:
+#         ppg_data, ecg_data, bp_data = [], [], []
+#
+#     return render_template("history.html",
+#                            ppg=ppg_data,
+#                            ecg=ecg_data,
+#                            bp=bp_data)
+
 
 # ---------- Feature Extraction ----------
 def extract_time_domain_features(sig):

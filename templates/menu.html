@@ -16,6 +16,52 @@
       align-items: center;
       color: #e0f2fe;
     }
+<!--    .top-navbar {-->
+<!--    position: fixed;-->
+<!--    top: 0;-->
+<!--    left: 0;-->
+<!--    width: 100%;-->
+<!--    height: 55px;-->
+<!--    background: rgba(10, 20, 40, 0.95);-->
+<!--    display: flex;-->
+<!--    justify-content: space-between;-->
+<!--    align-items: center;-->
+<!--    padding: 0 25px;-->
+<!--    z-index: 1000;-->
+<!--    border-bottom: 2px solid rgba(0, 191, 255, 0.3);-->
+<!--}-->
+
+<!--.home-btn {-->
+<!--    font-size: 18px;-->
+<!--    color: #fff;-->
+<!--    text-decoration: none;-->
+<!--    font-weight: bold;-->
+<!--}-->
+
+<!--.home-btn:hover {-->
+<!--    color: #00BFFF;-->
+<!--}-->
+
+<!--.welcome-text {-->
+<!--    font-size: 16px;-->
+<!--    color: #ffffff;-->
+<!--}-->
+
+<!--.logout-btn {-->
+<!--    background: #ff4d4d;-->
+<!--    padding: 7px 15px;-->
+<!--    border-radius: 10px;-->
+<!--    color: white;-->
+<!--    text-decoration: none;-->
+<!--    font-weight: bold;-->
+<!--}-->
+
+<!--.logout-btn:hover {-->
+<!--    background: #ff3333;-->
+<!--}-->
+.menu-container {
+    margin-top: 90px; /* prevent navbar overlap */
+}
 
     /* Card container */
     .menu-container {
@@ -27,6 +73,25 @@
       max-width: 600px;
       width: 90%;
     }
+    /* Typewriter Effect */
+.typewriter-container {
+    font-size: 22px;
+    font-weight: 600;
+    color: #00eaff;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: 2px solid #00eaff;
+    width: fit-content;
+    margin: 0 auto;
+    letter-spacing: 1px;
+    animation: caretBlink 0.8s infinite;
+}
+
+@keyframes caretBlink {
+    50% { border-color: transparent; }
+}
+
+
 
     /* Title with glow */
     .menu-title {
@@ -60,6 +125,7 @@
       box-shadow: 0 0 10px rgba(0, 195, 255, 0.5);
     }
 
+
     .menu-btn:hover {
       background: #00c3ff;
       color: #000;
@@ -85,7 +151,123 @@
     }
   </style>
 </head>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const username = "{{ username }}";
+    const fullText = "Welcome to Health Console | " + username;
+    const element = document.getElementById("typewriter-text");
+
+    let index = 0;
+
+    function typeWriter() {
+        if (index < fullText.length) {
+            element.innerHTML += fullText.charAt(index);
+            index++;
+            setTimeout(typeWriter, 80);
+        } else {
+            document.querySelector(".typewriter-container").style.borderRight = "none";
+        }
+    }
+
+    typeWriter();
+});
+</script>
+
+
 <body>
+<!-- ================= NAVBAR ================= -->
+<nav class="neon-navbar">
+    <div class="nav-left">
+        <a href="/menu" class="home-btn">🏠 Home</a>
+    </div>
+<!--    <div class="menu-row">-->
+<!--    <a href="/history" class="menu-btn">📚 Patient History</a>-->
+<!--</div>-->
+
+
+  <div class="typewriter-container">
+    <span id="typewriter-text"></span>
+</div>
+
+
+    <div class="nav-right">
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+
+</nav>
+
+<style>
+/* ===== NAVBAR BASE ===== */
+.neon-navbar {
+    width: 100%;
+    height: 60px;
+    background: linear-gradient(90deg, #051933, #071f40, #051933);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 25px;
+    box-shadow: 0 0 12px rgba(0, 200, 255, 0.3);
+    border-bottom: 1px solid rgba(0, 200, 255, 0.4);
+    position: fixed;
+    top: 0;
+    z-index: 9999;
+}
+
+/* ===== LEFT: HOME BUTTON ===== */
+.home-btn {
+    color: #4fc3f7;
+    font-size: 20px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: 0.3s;
+    margin-left: 15px;
+}
+.home-btn:hover {
+    color: #00eaff;
+    text-shadow: 0 0 8px #00eaff;
+}
+.nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+
+/* ===== CENTER: WELCOME TEXT ===== */
+.welcome-text {
+    font-size: 22px;
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px #00eaff;
+}
+
+/* ===== RIGHT: LOGOUT BUTTON ===== */
+.logout-btn {
+    background: #ff4d4d;
+    color: white;
+    padding: 8px 18px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: bold;
+    transition: 0.3s;
+    margin-right: 15px;
+
+}
+
+.logout-btn:hover {
+    background: #ff1a1a;
+    box-shadow: 0 0 10px #ff4d4d;
+}
+
+/* Prevent content from hiding under fixed navbar */
+body {
+    padding-top: 70px;
+}
+</style>
+
+
   <div class="menu-container">
     <h2 class="menu-title">IIT BHU Health Monitoring Menu</h2>
 
