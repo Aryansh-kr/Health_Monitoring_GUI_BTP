@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -100,7 +101,7 @@
 
         body.light .card {
             background-color: #ffffff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
         .card-title {
@@ -169,7 +170,9 @@
             gap: 10px;
         }
 
-        .temp-list, .gas-grid, .ppg-values {
+        .temp-list,
+        .gas-grid,
+        .ppg-values {
             padding: 10px;
             border-radius: 8px;
         }
@@ -192,7 +195,9 @@
             margin-bottom: 10px;
         }
 
-        .temp-item, .gas-item, .ppg-item {
+        .temp-item,
+        .gas-item,
+        .ppg-item {
             display: flex;
             justify-content: space-between;
             padding: 5px 0;
@@ -312,6 +317,7 @@
         }
 
         @media (max-width: 768px) {
+
             .content-grid,
             .graphs-container {
                 grid-template-columns: 1fr;
@@ -323,12 +329,15 @@
         }
     </style>
 </head>
+
 <body class="dark">
     <div class="container">
         <!-- Header -->
         <div class="header">
             <h1>HEALTH MONITORING DASHBOARD</h1>
             <div class="header-buttons">
+                <button class="btn" id="measureBtn" onclick="startMeasure()">⏱️ Measure</button>
+                <button class="btn" id="globalPauseBtn" onclick="togglePause()">⏸️ Pause</button>
                 <button class="btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
                 <button class="btn" onclick="window.location.href='/menu'">◀ Menu</button>
             </div>
@@ -361,7 +370,7 @@
                         <div class="vital-unit">mmHg</div>
                     </div>
                 </div>
-                <div class="status-bar" id="statusBar">All vitals normal</div>
+                <div class="status-bar" id="statusBar">Ready to measure</div>
             </div>
 
             <!-- Sensors Section -->
@@ -446,6 +455,7 @@
     <script>
         let isDark = true;
         let isPaused = false;
+        let isMeasuring = false;
         let currentPPGChannel = 'ir';
         let zoomFactor = 1.0;
         let autoScaleEnabled = true;
@@ -530,9 +540,27 @@
             ppgChart.update();
         }
 
+        function startMeasure() {
+            if (isMeasuring) return;
+
+            fetch('/api/start_measurement', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    isMeasuring = true;
+                    document.getElementById('statusBar').textContent = "Initializing Sensor...";
+                    document.getElementById('statusBar').style.color = isDark ? '#ffcc00' : '#f57f17';
+                })
+                .catch(error => console.error('Error starting measurement:', error));
+        }
+
         function togglePause() {
             isPaused = !isPaused;
-            document.getElementById('pauseBtn').textContent = isPaused ? 'Resume' : 'Pause';
+            const globalBtn = document.getElementById('globalPauseBtn');
+            const ppgBtn = document.getElementById('pauseBtn');
+
+            const text = isPaused ? '▶ Resume' : '⏸️ Pause';
+            if (globalBtn) globalBtn.textContent = text;
+            if (ppgBtn) ppgBtn.textContent = isPaused ? 'Resume' : 'Pause';
         }
 
         function autoScale() {
@@ -551,9 +579,23 @@
         }
 
         function updateData() {
+            if (!isMeasuring && !isPaused) return;
+
             fetch('/api/data')
                 .then(response => response.json())
                 .then(data => {
+                    if (data.status === 'waiting') {
+                        // Still in the 10s delay period
+                        return;
+                    }
+
+                    // Measurement active
+                    const statusBar = document.getElementById('statusBar');
+                    if (statusBar.textContent === "Initializing Sensor...") {
+                        statusBar.textContent = "Monitoring Active";
+                        statusBar.style.color = isDark ? '#00ffcc' : '#2e7d32';
+                    }
+
                     // Update vitals
                     updateVital('hrValue', data.heartrate, data.heartrate < 60 || data.heartrate > 100);
                     updateVital('spo2Value', data.spo2, data.spo2 < 95);
@@ -582,7 +624,9 @@
                     document.getElementById('ppgGreen').textContent = data.ppg[2];
 
                     // Update ECG chart
-                    updateChart(ecgChart, data.ecg_buffer);
+                    if (!isPaused) {
+                        updateChart(ecgChart, data.ecg_buffer);
+                    }
 
                     // Update PPG chart
                     if (!isPaused) {
@@ -620,9 +664,9 @@
             chart.update();
         }
 
-        // Update data every second
-        setInterval(updateData, 1000);
-        updateData();
+        // Update data every 100ms for smoother animation
+        setInterval(updateData, 100);
     </script>
 </body>
+
 </html>

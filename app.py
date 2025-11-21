@@ -313,16 +313,69 @@ def get_config():
 # -------------------------
 # API: Sensor data
 # -------------------------
+# Global timing variables
+MEASUREMENT_START_TIME = None
+WAVEFORM_START_TIME = None
+
+@app.route('/api/start_measurement', methods=['POST'])
+def api_start_measurement():
+    global MEASUREMENT_START_TIME, WAVEFORM_START_TIME, ECG_BUFFER, PPG_BUFFERS
+    
+    # Set start time to 10 seconds from now
+    MEASUREMENT_START_TIME = time.time() + 10
+    WAVEFORM_START_TIME = None # Will be set when first data is generated
+    
+    # Reset buffers
+    ECG_BUFFER = []
+    PPG_BUFFERS = {'ir': [], 'red': [], 'green': []}
+    
+    return jsonify({"status": "started", "start_time": MEASUREMENT_START_TIME})
+
 @app.route('/api/data')
 def api_get_data():
     """
     Return a snapshot of simulated sensor data along with internal buffers.
     This is the main API used by dashboards.
     """
+    global MEASUREMENT_START_TIME, WAVEFORM_START_TIME, ECG_BUFFER, PPG_BUFFERS
+    
+    current_time = time.time()
+    
+    # Check if measurement has started
+    if MEASUREMENT_START_TIME is None or current_time < MEASUREMENT_START_TIME:
+        return jsonify({
+            "status": "waiting",
+            "heartrate": 0,
+            "spo2": 0,
+            "ecg": 0,
+            "bp": "--/--",
+            "temperatures": [0, 0, 0],
+            "gas": [0]*6,
+            "ppg": [0, 0, 0],
+            "ecg_buffer": [],
+            "ppg_buffers": {'ir': [], 'red': [], 'green': []},
+            "timestamp": datetime.now().isoformat()
+        })
+
+    # Initialize waveform start time on first valid data generation
+    if WAVEFORM_START_TIME is None:
+        WAVEFORM_START_TIME = current_time
+
     # Use Python native types so jsonify is happy
     heartrate = int(np.random.randint(60, 100))
     spo2 = int(np.random.randint(92, 100))
-    ecg_val = float(np.random.uniform(-1.0, 1.0))
+    
+    # Generate realistic ECG (PQRST) based on time since waveform start
+    t = current_time - WAVEFORM_START_TIME
+    phase = (t * 1.2) % 1.0  # 1.2 Hz heart rate
+    if 0.0 < phase < 0.1: ecg_val = 0.1 * np.sin(phase * 10 * np.pi) # P wave
+    elif 0.15 < phase < 0.2: ecg_val = -0.2 # Q wave
+    elif 0.2 < phase < 0.25: ecg_val = 1.5 # R wave
+    elif 0.25 < phase < 0.3: ecg_val = -0.4 # S wave
+    elif 0.4 < phase < 0.6: ecg_val = 0.2 * np.sin((phase - 0.4) * 5 * np.pi) # T wave
+    else: ecg_val = 0.0
+    ecg_val += np.random.normal(0, 0.05) # Add noise
+
     bp_sys = int(np.random.randint(110, 130))
     bp_dia = int(np.random.randint(70, 85))
     temperatures = [
@@ -338,14 +391,21 @@ def api_get_data():
         int(np.random.randint(0, 30)),
         float(np.random.uniform(0, 1.0))
     ]
+    
+    # Generate realistic PPG
+    ppg_phase = (t * 1.2) % 1.0
+    ppg_base = np.exp(-5 * ppg_phase) * np.sin(2 * np.pi * ppg_phase) # Dicrotic notch simulation
+    ppg_val = int(100000 + 20000 * ppg_base + np.random.randint(-1000, 1000))
+    
     ppg = [
-        int(np.random.randint(100000, 130000)),
-        int(np.random.randint(60000, 90000)),
-        int(np.random.randint(40000, 60000))
+        ppg_val,
+        int(ppg_val * 0.6),
+        int(ppg_val * 0.4)
     ]
     timestamp = datetime.now().isoformat()
 
     data = {
+        "status": "active",
         "heartrate": heartrate,
         "spo2": spo2,
         "ecg": ecg_val,
@@ -357,9 +417,8 @@ def api_get_data():
     }
 
     # Update buffers (circular)
-    global ECG_BUFFER, PPG_BUFFERS
     ECG_BUFFER.append(ecg_val)
-    if len(ECG_BUFFER) > MAX_BUFFER_SIZE:
+    if len(ECG_BUFFER) > 300: # Increased buffer size
         ECG_BUFFER.pop(0)
 
     PPG_BUFFERS['ir'].append(ppg[0])
@@ -367,7 +426,7 @@ def api_get_data():
     PPG_BUFFERS['green'].append(ppg[2])
 
     for key in PPG_BUFFERS:
-        if len(PPG_BUFFERS[key]) > MAX_BUFFER_SIZE:
+        if len(PPG_BUFFERS[key]) > 300: # Increased buffer size
             PPG_BUFFERS[key].pop(0)
 
     # Attach copies of buffers (to avoid accidental external mutation)
@@ -652,9 +711,11 @@ def get_duration():
 # Load models
 current_dir = os.path.dirname(os.path.abspath(__file__))
 try:
-    model_sbp = joblib.load(os.path.join(current_dir, "sys.joblib"))
-    model_dbp = joblib.load(os.path.join(current_dir, "dys.joblib"))
-    logging.info("BP models loaded successfully")
+    # model_sbp = joblib.load(os.path.join(current_dir, "sys.joblib"))
+    # model_dbp = joblib.load(os.path.join(current_dir, "dys.joblib"))
+    # logging.info("BP models loaded successfully")
+    model_sbp = None
+    model_dbp = None
 except Exception as e:
     logging.error(f"Error loading models: {e}")
     model_sbp = None
@@ -757,16 +818,37 @@ def predict():
     data = request.json.get("ppg", [])
     fs = request.json.get("fs", 100)
 
-    if not data or model_sbp is None or model_dbp is None:
-        return jsonify({"error": "Invalid input or models not loaded"}), 400
+    if not data:
+        return jsonify({"error": "Invalid input"}), 400
 
     try:
         data = np.array(data, dtype=float)
         filt = butter_bandpass_filter(data, fs=fs)
-        X = extract_features(filt)
-        sbp = float(model_sbp.predict(X)[0])
-        dbp = float(model_dbp.predict(X)[0])
-        return jsonify({"sbp": round(sbp,1), "dbp": round(dbp,1), "filtered": filt.tolist()})
+        
+        # Simulate BP values
+        sbp = random.randint(110, 130)
+        dbp = random.randint(70, 85)
+        
+        # Generate synthetic ECG data for visualization
+        # Create a simple PQRST-like waveform repeated
+        ecg_data = []
+        t = np.linspace(0, len(data)/fs, len(data))
+        for time_point in t:
+            phase = (time_point * 1.2) % 1.0
+            if 0.0 < phase < 0.1: val = 0.1 * np.sin(phase * 10 * np.pi)
+            elif 0.15 < phase < 0.2: val = -0.2
+            elif 0.2 < phase < 0.25: val = 1.5
+            elif 0.25 < phase < 0.3: val = -0.4
+            elif 0.4 < phase < 0.6: val = 0.2 * np.sin((phase - 0.4) * 5 * np.pi)
+            else: val = 0.0
+            ecg_data.append(val + np.random.normal(0, 0.05))
+
+        return jsonify({
+            "sbp": sbp, 
+            "dbp": dbp, 
+            "filtered": filt.tolist(),
+            "ecg": ecg_data
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
