@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Control Center</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0a0a2a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #2a2a2a;
+            padding-bottom: 10px;
+        }
+
+        h1 {
+            color: #00ffcc;
+            margin: 0;
+        }
+
+        .logout-btn {
+            background-color: #c0392b;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: #1a2436;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #2a2a2a;
+            padding-bottom: 10px;
+            font-size: 18px;
+            color: #2980b9;
+        }
+
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: opacity 0.3s;
+        }
+
+        .control-btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-pause {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .btn-reset {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .btn-stop {
+            background-color: #7f8c8d;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        th {
+            color: #00ffcc;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-active {
+            background-color: #2ecc71;
+        }
+
+        .status-paused {
+            background-color: #f39c12;
+        }
+
+        .status-idle {
+            background-color: #7f8c8d;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Admin Control Center</h1>
+        <a href="/admin/logout" class="logout-btn">Logout</a>
+    </div>
+
+    <div class="grid">
+        <!-- System Controls -->
+        <div class="card">
+            <h2>System Controls</h2>
+            <button class="control-btn btn-pause" onclick="toggleGlobalPause()" id="pauseBtn">
+                ⏸️ Global Pause
+            </button>
+            <button class="control-btn btn-stop" onclick="stopMeasurement()">
+                ⏹️ Stop Measurement
+            </button>
+            <button class="control-btn btn-reset" onclick="resetSystem()">
+                ⚠️ System Reset
+            </button>
+            <div style="margin-top: 20px;">
+                <strong>Current Status:</strong>
+                <span id="systemStatus">Checking...</span>
+            </div>
+        </div>
+
+        <!-- User Management -->
+        <div class="card">
+            <h2>Registered Users</h2>
+            <table id="userTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Users will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let isPaused = false;
+
+        function fetchUsers() {
+            fetch('/api/admin/users')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.querySelector('#userTable tbody');
+                    tbody.innerHTML = '';
+                    data.users.forEach(user => {
+                        const tr = document.createElement('tr');
+
+                        // Status Badge
+                        let statusHtml = '<span class="status-indicator status-idle"></span> Offline';
+                        if (user.is_live) {
+                            statusHtml = '<span class="status-indicator status-active"></span> 🔴 Live';
+                        }
+                        if (user.is_stopped) {
+                            statusHtml = '<span class="status-indicator status-idle"></span> ⏹️ Stopped';
+                        }
+
+                        // Action Buttons
+                        let actionHtml = '';
+                        if (user.is_paused) {
+                            actionHtml += `<button onclick="performUserAction('${user.name}', 'resume')" style="background:#2ecc71; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer; margin-right:5px;">▶️ Resume</button>`;
+                        } else {
+                            actionHtml += `<button onclick="performUserAction('${user.name}', 'pause')" style="background:#f39c12; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer; margin-right:5px;">⏸️ Pause</button>`;
+                        }
+
+                        if (!user.is_stopped) {
+                            actionHtml += `<button onclick="performUserAction('${user.name}', 'stop')" style="background:#e74c3c; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer;">⏹️ Stop</button>`;
+                        } else {
+                            actionHtml += `<button onclick="performUserAction('${user.name}', 'start')" style="background:#3498db; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer;">🔄 Restart</button>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td>${user.id}</td>
+                            <td>${user.name}</td>
+                            <td>${user.email}</td>
+                            <td>${statusHtml}</td>
+                            <td>${actionHtml}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        function performUserAction(username, action) {
+            fetch(`/api/admin/user/${username}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    // alert(data.message);
+                    fetchUsers(); // Refresh immediately
+                });
+        }
+
+        function toggleGlobalPause() {
+            fetch('/api/admin/system/pause', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    isPaused = data.paused;
+                    updatePauseButton();
+                    alert('System ' + (isPaused ? 'Paused' : 'Resumed'));
+                });
+        }
+
+        function stopMeasurement() {
+            if (confirm('Stop current measurement for all users?')) {
+                fetch('/api/admin/system/stop', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => alert(data.message));
+            }
+        }
+
+        function resetSystem() {
+            if (confirm('WARNING: This will clear all data buffers. Continue?')) {
+                fetch('/api/admin/system/reset', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => alert(data.message));
+            }
+        }
+
+        function updatePauseButton() {
+            const btn = document.getElementById('pauseBtn');
+            if (isPaused) {
+                btn.textContent = '▶️ Resume System';
+                btn.style.backgroundColor = '#2ecc71';
+            } else {
+                btn.textContent = '⏸️ Global Pause';
+                btn.style.backgroundColor = '#f39c12';
+            }
+        }
+
+        // Initial Load and Poll
+        fetchUsers();
+        setInterval(fetchUsers, 2000); // Poll every 2 seconds
+    </script>
+</body>
+
+</html>

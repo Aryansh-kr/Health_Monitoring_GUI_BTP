@@ -453,183 +453,177 @@
     </div>
 
     <script>
-        let isDark = true;
-        let isPaused = false;
-        let isMeasuring = false;
-        let currentPPGChannel = 'ir';
-        let zoomFactor = 1.0;
-        let autoScaleEnabled = true;
+                let isDark = true;
+                let isPaused = false;
+                let isMeasuring = false;
+                let currentPPGChannel = 'ir';
+                let zoomFactor = 1.0;
+                let autoScaleEnabled = true;
 
-        // Chart.js configurations
-        const chartConfig = {
-            type: 'line',
-            data: {
-                labels: [],
+                // Chart.js configurations
+                const chartConfig = {
+                    type: 'line',
+                data: {
+                    labels: [],
                 datasets: [{
                     data: [],
-                    borderColor: '#00ffcc',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4,
-                    pointRadius: 0
+                borderColor: '#00ffcc',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 0
                 }]
             },
-            options: {
-                responsive: true,
+                options: {
+                    responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
                 plugins: {
-                    legend: { display: false }
+                    legend: {display: false }
                 },
                 scales: {
                     x: {
-                        display: true,
-                        grid: { color: '#2a2a2a' },
-                        ticks: { color: '#ffffff' }
+                    display: true,
+                grid: {color: '#2a2a2a' },
+                ticks: {color: '#ffffff' }
                     },
-                    y: {
-                        display: true,
-                        grid: { color: '#2a2a2a' },
-                        ticks: { color: '#ffffff' }
+                y: {
+                    display: true,
+                grid: {color: '#2a2a2a' },
+                ticks: {color: '#ffffff' }
                     }
                 }
             }
         };
 
-        const ecgChart = new Chart(document.getElementById('ecgChart'), JSON.parse(JSON.stringify(chartConfig)));
-        const ppgChart = new Chart(document.getElementById('ppgChart'), JSON.parse(JSON.stringify(chartConfig)));
-        ppgChart.data.datasets[0].borderColor = '#ff6666';
+                const ecgChart = new Chart(document.getElementById('ecgChart'), JSON.parse(JSON.stringify(chartConfig)));
+                const ppgChart = new Chart(document.getElementById('ppgChart'), JSON.parse(JSON.stringify(chartConfig)));
+                ppgChart.data.datasets[0].borderColor = '#ff6666';
 
-        function toggleTheme() {
-            isDark = !isDark;
-            document.body.className = isDark ? 'dark' : 'light';
-            document.getElementById('themeBtn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+                function toggleTheme() {
+                    isDark = !isDark;
+                document.body.className = isDark ? 'dark' : 'light';
+                document.getElementById('themeBtn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
 
-            // Update chart colors
-            const gridColor = isDark ? '#2a2a2a' : '#e0e0e0';
-            const textColor = isDark ? '#ffffff' : '#2c3e50';
+                // Update chart colors
+                const gridColor = isDark ? '#2a2a2a' : '#e0e0e0';
+                const textColor = isDark ? '#ffffff' : '#2c3e50';
 
             [ecgChart, ppgChart].forEach(chart => {
-                chart.options.scales.x.grid.color = gridColor;
+                    chart.options.scales.x.grid.color = gridColor;
                 chart.options.scales.y.grid.color = gridColor;
                 chart.options.scales.x.ticks.color = textColor;
                 chart.options.scales.y.ticks.color = textColor;
                 chart.update();
             });
 
-            ecgChart.data.datasets[0].borderColor = isDark ? '#00ffcc' : '#2980b9';
-            updatePPGColor();
-            ecgChart.update();
-            ppgChart.update();
+                ecgChart.data.datasets[0].borderColor = isDark ? '#00ffcc' : '#2980b9';
+                updatePPGColor();
+                ecgChart.update();
+                ppgChart.update();
         }
 
-        function updatePPGColor() {
+                function updatePPGColor() {
             const colors = {
-                'ir': '#ff6666',
+                    'ir': '#ff6666',
                 'red': '#66b3ff',
                 'green': '#2ecc71'
             };
-            ppgChart.data.datasets[0].borderColor = colors[currentPPGChannel];
+                ppgChart.data.datasets[0].borderColor = colors[currentPPGChannel];
         }
 
-        function switchPPGTab(channel) {
-            currentPPGChannel = channel;
+                function switchPPGTab(channel) {
+                    currentPPGChannel = channel;
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-            updatePPGColor();
-            ppgChart.update();
+                event.target.classList.add('active');
+                updatePPGColor();
+                ppgChart.update();
         }
 
-        function startMeasure() {
+                function startMeasure() {
             if (isMeasuring) return;
 
-            fetch('/api/start_measurement', { method: 'POST' })
+                fetch('/api/start_measurement', {method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
                     isMeasuring = true;
-                    document.getElementById('statusBar').textContent = "Initializing Sensor...";
-                    document.getElementById('statusBar').style.color = isDark ? '#ffcc00' : '#f57f17';
+                document.getElementById('statusBar').textContent = "Initializing Sensor...";
+                document.getElementById('statusBar').style.color = isDark ? '#ffcc00' : '#f57f17';
                 })
                 .catch(error => console.error('Error starting measurement:', error));
         }
 
-        function togglePause() {
-            isPaused = !isPaused;
-            const globalBtn = document.getElementById('globalPauseBtn');
-            const ppgBtn = document.getElementById('pauseBtn');
+                function togglePause() {
+                    isPaused = !isPaused;
+                const globalBtn = document.getElementById('globalPauseBtn');
+                const ppgBtn = document.getElementById('pauseBtn');
 
-            const text = isPaused ? '▶ Resume' : '⏸️ Pause';
-            if (globalBtn) globalBtn.textContent = text;
-            if (ppgBtn) ppgBtn.textContent = isPaused ? 'Resume' : 'Pause';
+                const text = isPaused ? '▶ Resume' : '⏸️ Pause';
+                if (globalBtn) globalBtn.textContent = text;
+                if (ppgBtn) ppgBtn.textContent = isPaused ? 'Resume' : 'Pause';
         }
 
-        function autoScale() {
-            autoScaleEnabled = true;
-            zoomFactor = 1.0;
+                function autoScale() {
+                    autoScaleEnabled = true;
+                zoomFactor = 1.0;
         }
 
-        function zoomIn() {
-            autoScaleEnabled = false;
-            zoomFactor *= 0.8;
+                function zoomIn() {
+                    autoScaleEnabled = false;
+                zoomFactor *= 0.8;
         }
 
-        function zoomOut() {
-            autoScaleEnabled = false;
-            zoomFactor *= 1.2;
+                function zoomOut() {
+                    autoScaleEnabled = false;
+                zoomFactor *= 1.2;
         }
 
-        function updateData() {
+                function updateData() {
             if (!isMeasuring && !isPaused) return;
 
-            fetch('/api/data')
+                fetch('/api/data')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'waiting') {
-                        // Still in the 10s delay period
                         return;
                     }
 
-                    // Measurement active
-                    const statusBar = document.getElementById('statusBar');
-                    if (statusBar.textContent === "Initializing Sensor...") {
-                        statusBar.textContent = "Monitoring Active";
-                        statusBar.style.color = isDark ? '#00ffcc' : '#2e7d32';
+                const statusBar = document.getElementById('statusBar');
+                if (statusBar.textContent === "Initializing Sensor...") {
+                    statusBar.textContent = "Monitoring Active";
+                statusBar.style.color = isDark ? '#00ffcc' : '#2e7d32';
                     }
 
+                if (!isPaused) {
                     // Update vitals
                     updateVital('hrValue', data.heartrate, data.heartrate < 60 || data.heartrate > 100);
-                    updateVital('spo2Value', data.spo2, data.spo2 < 95);
-                    updateVital('ecgValue', data.ecg.toFixed(2), Math.abs(data.ecg) > 1.5);
-                    updateVital('bpValue', data.bp, false);
+                updateVital('spo2Value', data.spo2, data.spo2 < 95);
+                        updateVital('ecgValue', data.ecg.toFixed(2), Math.abs(data.ecg) > 1.5);
+                updateVital('bpValue', data.bp, false);
 
-                    // Update temperatures
-                    document.getElementById('tempContact').textContent = data.temperatures[0].toFixed(1) + '°C';
-                    document.getElementById('tempAmbient').textContent = data.temperatures[1].toFixed(1) + '°C';
-                    document.getElementById('tempObject').textContent = data.temperatures[2].toFixed(1) + '°C';
+                // Update temperatures
+                document.getElementById('tempContact').textContent = data.temperatures[0].toFixed(1) + '°C';
+                document.getElementById('tempAmbient').textContent = data.temperatures[1].toFixed(1) + '°C';
+                document.getElementById('tempObject').textContent = data.temperatures[2].toFixed(1) + '°C';
 
-                    // Update gas sensors
-                    const gases = ['CO', 'CH4', 'C2H5OH', 'H2', 'NH3', 'NO2'];
-                    const gasGrid = document.getElementById('gasGrid');
-                    gasGrid.innerHTML = '';
-                    data.gas.forEach((value, i) => {
-                        const item = document.createElement('div');
-                        item.className = 'gas-item';
-                        item.innerHTML = `<span>${gases[i]}</span><span>${typeof value === 'number' ? value.toFixed(1) : value}</span>`;
-                        gasGrid.appendChild(item);
-                    });
+                // Update gas sensors
+                const gases = ['CO', 'CH4', 'C2H5OH', 'H2', 'NH3', 'NO2'];
+                const gasGrid = document.getElementById('gasGrid');
+                gasGrid.innerHTML = '';
+                        data.gas.forEach((value, i) => {
+                            const item = document.createElement('div');
+                item.className = 'gas-item';
+                item.innerHTML = `<span>${gases[i]}</span><span>${typeof value === 'number' ? value.toFixed(1) : value}</span>`;
+                            gasGrid.appendChild(item);
+                        });
 
-                    // Update PPG values
-                    document.getElementById('ppgIR').textContent = data.ppg[0];
-                    document.getElementById('ppgRed').textContent = data.ppg[1];
-                    document.getElementById('ppgGreen').textContent = data.ppg[2];
+                        // Update PPG values
+                        document.getElementById('ppgIR').textContent = data.ppg[0];
+                        document.getElementById('ppgRed').textContent = data.ppg[1];
+                        document.getElementById('ppgGreen').textContent = data.ppg[2];
 
-                    // Update ECG chart
-                    if (!isPaused) {
+                        // Update charts
                         updateChart(ecgChart, data.ecg_buffer);
-                    }
-
-                    // Update PPG chart
-                    if (!isPaused) {
                         updateChart(ppgChart, data.ppg_buffers[currentPPGChannel], autoScaleEnabled, zoomFactor);
                     }
                 })

@@ -212,6 +212,116 @@ def master_dashboard():
 def bp_page():
     return render_template("bp.html", title="Blood Pressure", icon="🩸")
 
+# -------------------------
+# ADMIN PANEL
+# -------------------------
+ADMIN_CREDENTIALS = {'username': 'Aryansh', 'password': '1234'}
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username == ADMIN_CREDENTIALS['username'] and password == ADMIN_CREDENTIALS['password']:
+            session['admin_user'] = username
+            return redirect('/admin')
+        else:
+            return render_template('admin_login.html', error="Invalid Credentials")
+    return render_template('admin_login.html')
+
+@app.route('/admin')
+def admin_panel():
+    if 'admin_user' not in session:
+        return redirect('/admin/login')
+    return render_template('admin_panel.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_user', None)
+    return redirect('/admin/login')
+
+@app.route('/api/admin/users')
+def api_admin_users():
+    if 'admin_user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = sqlite3.connect("users.db")
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, email FROM users")
+    db_users = cur.fetchall()
+    conn.close()
+
+    users_list = []
+    current_time = time.time()
+    
+    for row in db_users:
+        username = row[1]
+        state = USER_STATES.get(username, {'paused': False, 'stopped': False, 'last_seen': 0})
+        is_live = (current_time - state['last_seen']) < 10  # Consider live if seen in last 10s
+        
+        users_list.append({
+            'id': row[0], 
+            'name': username, 
+            'email': row[2],
+            'is_live': is_live,
+            'is_paused': state['paused'],
+            'is_stopped': state['stopped']
+        })
+        
+    return jsonify({'users': users_list})
+
+@app.route('/api/admin/user/<username>/action', methods=['POST'])
+def api_admin_user_action(username):
+    if 'admin_user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    action = request.json.get('action')
+    
+    if username not in USER_STATES:
+        USER_STATES[username] = {'paused': False, 'stopped': False, 'last_seen': 0}
+    
+    if action == 'pause':
+        USER_STATES[username]['paused'] = True
+    elif action == 'resume':
+        USER_STATES[username]['paused'] = False
+    elif action == 'stop':
+        USER_STATES[username]['stopped'] = True
+    elif action == 'start': # Optional: allow restarting
+        USER_STATES[username]['stopped'] = False
+        
+    return jsonify({'message': f'Action {action} performed for {username}', 'state': USER_STATES[username]})
+
+@app.route('/api/admin/system/pause', methods=['POST'])
+def api_admin_pause():
+    if 'admin_user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    global paused
+    paused = not paused
+    return jsonify({'paused': paused, 'message': 'System pause state toggled'})
+
+@app.route('/api/admin/system/stop', methods=['POST'])
+def api_admin_stop():
+    if 'admin_user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    global MEASUREMENT_START_TIME
+    MEASUREMENT_START_TIME = None
+    # Note: isMeasuring is a frontend state, backend just controls the data flow via timestamps
+    return jsonify({'message': 'Measurement stopped'})
+
+@app.route('/api/admin/system/reset', methods=['POST'])
+def api_admin_reset():
+    if 'admin_user' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    global ECG_BUFFER, PPG_BUFFERS, MEASUREMENT_START_TIME, WAVEFORM_START_TIME
+    ECG_BUFFER = []
+    PPG_BUFFERS = {'ir': [], 'red': [], 'green': []}
+    MEASUREMENT_START_TIME = None
+    WAVEFORM_START_TIME = None
+    return jsonify({'message': 'System buffers and state reset'})
+
 
 # -------------------------
 # API: System / Connectivity
@@ -331,14 +441,34 @@ def api_start_measurement():
     
     return jsonify({"status": "started", "start_time": MEASUREMENT_START_TIME})
 
+# Global user state tracking
+USER_STATES = {}
+
 @app.route('/api/data')
 def api_get_data():
     """
     Return a snapshot of simulated sensor data along with internal buffers.
     This is the main API used by dashboards.
     """
-    global MEASUREMENT_START_TIME, WAVEFORM_START_TIME, ECG_BUFFER, PPG_BUFFERS
+    global MEASUREMENT_START_TIME, WAVEFORM_START_TIME, ECG_BUFFER, PPG_BUFFERS, USER_STATES
     
+    current_user = session.get('user')
+    if current_user:
+        # Initialize or update user state
+        if current_user not in USER_STATES:
+            USER_STATES[current_user] = {'paused': False, 'stopped': False, 'last_seen': 0}
+        
+        USER_STATES[current_user]['last_seen'] = time.time()
+        
+        # Check for stop/pause
+        if USER_STATES[current_user]['stopped']:
+            return jsonify({"status": "stopped"})
+        
+        if USER_STATES[current_user]['paused']:
+            # Return current data but don't advance buffers or time if we were simulating per-user
+            # For now, just send a flag so frontend knows to pause
+            return jsonify({"status": "paused", "timestamp": datetime.now().isoformat()})
+
     current_time = time.time()
     
     # Check if measurement has started
@@ -711,11 +841,9 @@ def get_duration():
 # Load models
 current_dir = os.path.dirname(os.path.abspath(__file__))
 try:
-    # model_sbp = joblib.load(os.path.join(current_dir, "sys.joblib"))
-    # model_dbp = joblib.load(os.path.join(current_dir, "dys.joblib"))
-    # logging.info("BP models loaded successfully")
-    model_sbp = None
-    model_dbp = None
+    model_sbp = joblib.load(os.path.join(current_dir, "sys.joblib"))
+    model_dbp = joblib.load(os.path.join(current_dir, "dys.joblib"))
+    logging.info("BP models loaded successfully")
 except Exception as e:
     logging.error(f"Error loading models: {e}")
     model_sbp = None
@@ -825,9 +953,17 @@ def predict():
         data = np.array(data, dtype=float)
         filt = butter_bandpass_filter(data, fs=fs)
         
-        # Simulate BP values
-        sbp = random.randint(110, 130)
-        dbp = random.randint(70, 85)
+        # Feature extraction
+        features = extract_features(filt)
+        
+        # Predict BP
+        if model_sbp and model_dbp:
+            sbp = int(model_sbp.predict(features)[0])
+            dbp = int(model_dbp.predict(features)[0])
+        else:
+            # Fallback if models failed to load
+            sbp = random.randint(110, 130)
+            dbp = random.randint(70, 85)
         
         # Generate synthetic ECG data for visualization
         # Create a simple PQRST-like waveform repeated
@@ -850,6 +986,7 @@ def predict():
             "ecg": ecg_data
         })
     except Exception as e:
+        logging.error(f"Prediction error: {e}")
         return jsonify({"error": str(e)}), 500
 
 # -------------------------
